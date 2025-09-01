@@ -1,0 +1,54 @@
+# Security - NEVER commit these
+*.key
+*.pem
+*.crt
+*.password
+wifi_password.txt
+wpa_passphrase.txt
+/secrets/
+/private/
+
+# Configuration with sensitive data
+configs/private/
+*.conf.local
+routerpi.conf
+
+# Runtime and state files
+/run/
+/var/log/
+*.pid
+*.state
+*.leases
+/state/
+
+# Backup files
+*.backup
+*.bak
+*.old
+*~
+*.swp
+*.swo
+.*.sw?
+
+# OS files
+.DS_Store
+Thumbs.db
+.Trash-*
+.nfs*
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# Test artifacts
+*.pcap
+*.cap
+test_results/
+coverage/
+
+# Build artifacts
+*.deb
+*.rpm
+build/
+dist/

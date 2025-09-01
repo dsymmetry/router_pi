@@ -1,0 +1,14 @@
+[Unit]
+Description=Router Pi Secure Travel Router
+After=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/router_pi/router_pi_secure.sh start
+ExecStop=/opt/router_pi/router_pi_secure.sh stop
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
