@@ -6,6 +6,7 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC2034
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="/var/log/routerpi"
 VALIDATION_LOG="$LOG_DIR/config_validation.log"

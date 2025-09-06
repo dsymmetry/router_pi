@@ -6,6 +6,7 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC2034
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="/var/log/routerpi"
 DIAG_LOG="$LOG_DIR/network_diag.log"
@@ -296,7 +297,7 @@ check_performance() {
     mem_free=$(echo "$mem_info" | awk '{print $4}')
     local mem_percent
     mem_percent=$(awk "BEGIN {printf \"%.1f\", $mem_used/$mem_total*100}")
-    echo "Memory usage: ${mem_percent}% (${mem_used}/${mem_total})"
+    echo "Memory usage: ${mem_percent}% (${mem_used}/${mem_total}) - Free: ${mem_free}"
     
     # Temperature (if available)
     if command -v vcgencmd >/dev/null 2>&1; then

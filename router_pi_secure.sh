@@ -33,13 +33,16 @@ HIDDEN_SSID="${HIDDEN_SSID:-false}"              # Hide SSID broadcast
 # === SECURITY PATHS ===
 HOSTAPD_CONF="${HOSTAPD_CONF:-/etc/hostapd/hostapd.conf}"
 DNSMASQ_DROPIN="/etc/dnsmasq.d/router-secure.conf"
+# shellcheck disable=SC2034
 SURICATA_CONF="/etc/suricata/suricata.yaml"
 STATE_DIR="/run/routerpi"
 LOG_DIR="/var/log/routerpi"
 CONFIG_DIR="/etc/routerpi"
+# shellcheck disable=SC2034
 BLOCKED_IPS_FILE="$STATE_DIR/blocked_ips"
 WIFI_PASSWORD_FILE="$STATE_DIR/wifi_password"
 SECURITY_LOG="$LOG_DIR/security.log"
+# shellcheck disable=SC2034
 TRAFFIC_LOG="$LOG_DIR/traffic.log"
 
 # Create required directories
@@ -138,6 +141,7 @@ setup_firewall() {
     
     # Use external script if available
     if [[ -f "$SCRIPT_DIR/configs/iptables_rules.sh" ]]; then
+        # shellcheck disable=SC1091
         source "$SCRIPT_DIR/configs/iptables_rules.sh"
         return 0
     fi
