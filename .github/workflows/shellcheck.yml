@@ -6,3 +6,8 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: ludeeus/action-shellcheck@master
+      with:
+        scandir: '.'
+        format: gcc
+        severity: error
+        exclude_paths: docs README.md
