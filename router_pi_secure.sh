@@ -20,6 +20,12 @@ BLOCK_TIME="${BLOCK_TIME:-3600}"                 # Auto-unblock time (seconds)
 MAX_CONN_PER_IP="${MAX_CONN_PER_IP:-20}"        # Connection limit per IP
 SCAN_THRESHOLD="${SCAN_THRESHOLD:-10}"           # Port scan detection threshold
 
+# === VPN CONFIGURATION ===
+ENABLE_VPN="${ENABLE_VPN:-false}"                # Enable WireGuard VPN
+VPN_CONFIG="${VPN_CONFIG:-/etc/routerpi/vpn/client.conf}"  # WireGuard config
+ENABLE_KILL_SWITCH="${ENABLE_KILL_SWITCH:-true}" # Enable VPN kill switch
+VPN_SERVER_IP="${VPN_SERVER_IP:-}"               # VPN server IP (for kill switch)
+
 # === NETWORK CONFIGURATION ===
 LAN_IFACE="${LAN_IFACE:-wlan0}"                  # AP interface (MT7612U)
 WAN_IFACE="${WAN_IFACE:-$(ip route 2>/dev/null | awk '/default/ {print $5; exit}')}"
@@ -133,6 +139,134 @@ configure_mt7612u() {
     iw dev "$iface" set power_save off 2>/dev/null || true
     
     log "✓ MT7612U interface configured"
+}
+
+# === WIREGUARD VPN FUNCTIONS ===
+setup_wireguard_killswitch() {
+    if [[ "$ENABLE_KILL_SWITCH" != "true" ]]; then
+        return 0
+    fi
+    
+    log "Setting up WireGuard kill switch..."
+    
+    # Allow local traffic
+    iptables -I OUTPUT -o lo -j ACCEPT
+    iptables -I OUTPUT -d 192.168.0.0/16 -j ACCEPT
+    iptables -I OUTPUT -d 10.0.0.0/8 -j ACCEPT
+    iptables -I OUTPUT -d 172.16.0.0/12 -j ACCEPT
+    
+    # Allow WireGuard server if specified
+    if [[ -n "$VPN_SERVER_IP" ]]; then
+        iptables -I OUTPUT -d "$VPN_SERVER_IP" -j ACCEPT
+        log "✓ Kill switch allows VPN server: $VPN_SERVER_IP"
+    fi
+    
+    # Allow established connections
+    iptables -I OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+    
+    # Block everything else
+    iptables -A OUTPUT -j LOG --log-prefix "KILL-SWITCH-DROP: " --log-level 4
+    iptables -A OUTPUT -j DROP
+    
+    log "✓ WireGuard kill switch enabled"
+}
+
+disable_wireguard_killswitch() {
+    log "Disabling WireGuard kill switch..."
+    
+    # Remove kill switch rules
+    iptables -D OUTPUT -j DROP 2>/dev/null || true
+    iptables -D OUTPUT -j LOG --log-prefix "KILL-SWITCH-DROP: " --log-level 4 2>/dev/null || true
+    iptables -D OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null || true
+    iptables -D OUTPUT -d 172.16.0.0/12 -j ACCEPT 2>/dev/null || true
+    iptables -D OUTPUT -d 10.0.0.0/8 -j ACCEPT 2>/dev/null || true
+    iptables -D OUTPUT -d 192.168.0.0/16 -j ACCEPT 2>/dev/null || true
+    iptables -D OUTPUT -o lo -j ACCEPT 2>/dev/null || true
+    
+    if [[ -n "$VPN_SERVER_IP" ]]; then
+        iptables -D OUTPUT -d "$VPN_SERVER_IP" -j ACCEPT 2>/dev/null || true
+    fi
+    
+    log "✓ WireGuard kill switch disabled"
+}
+
+start_wireguard() {
+    if [[ "$ENABLE_VPN" != "true" ]]; then
+        return 0
+    fi
+    
+    if [[ ! -f "$VPN_CONFIG" ]]; then
+        log "⚠ WireGuard config not found: $VPN_CONFIG"
+        log "  Run: sudo ./scripts/vpn_setup.sh setup-wg client"
+        return 0
+    fi
+    
+    log "Starting WireGuard VPN..."
+    
+    # Enable kill switch first if enabled
+    if [[ "$ENABLE_KILL_SWITCH" == "true" ]]; then
+        setup_wireguard_killswitch
+    fi
+    
+    # Start WireGuard
+    local config_name
+    config_name=$(basename "$VPN_CONFIG" .conf)
+    
+    if wg-quick up "$config_name" 2>/dev/null; then
+        log "✓ WireGuard VPN connected"
+        log_security "WireGuard VPN established with kill switch protection"
+        
+        # Verify connection
+        if wg show | grep -q "interface:"; then
+            log "✓ WireGuard interface active"
+        fi
+    else
+        log "⚠ Failed to start WireGuard VPN"
+        if [[ "$ENABLE_KILL_SWITCH" == "true" ]]; then
+            log "⚠ Kill switch remains active - no internet access"
+        fi
+    fi
+}
+
+stop_wireguard() {
+    log "Stopping WireGuard VPN..."
+    
+    # Stop all WireGuard interfaces
+    for interface in $(wg show interfaces 2>/dev/null); do
+        wg-quick down "$interface" 2>/dev/null || true
+        log "✓ Stopped WireGuard interface: $interface"
+    done
+    
+    # Disable kill switch
+    disable_wireguard_killswitch
+    
+    log "✓ WireGuard VPN stopped"
+}
+
+check_wireguard_status() {
+    if [[ "$ENABLE_VPN" != "true" ]]; then
+        return 0
+    fi
+    
+    echo "WireGuard VPN Status:"
+    if command -v wg >/dev/null 2>&1; then
+        if wg show 2>/dev/null | grep -q "interface:"; then
+            echo "  ✅ Connected"
+            wg show | head -10
+        else
+            echo "  ⚪ Disconnected"
+        fi
+    else
+        echo "  ❌ WireGuard not installed"
+    fi
+    
+    echo "Kill Switch Status:"
+    if iptables -L OUTPUT | grep -q "DROP"; then
+        echo "  🛡️ Active"
+    else
+        echo "  ⚪ Inactive"
+    fi
+    echo
 }
 
 # === SECURITY FUNCTIONS ===
@@ -382,6 +516,9 @@ start_router() {
     systemctl restart dnsmasq
     systemctl restart hostapd
     
+    # Start WireGuard VPN if enabled
+    start_wireguard
+    
     # Run additional scripts if available
     for script in "$SCRIPT_DIR/scripts/mt7612u_monitor.sh" "$SCRIPT_DIR/scripts/security_audit.sh"; do
         if [[ -x "$script" ]]; then
@@ -404,6 +541,9 @@ start_router() {
 stop_router() {
     check_root
     log "🛑 Stopping secure router..."
+    
+    # Stop WireGuard VPN
+    stop_wireguard
     
     # Stop services
     systemctl stop hostapd 2>/dev/null || true
@@ -484,8 +624,11 @@ status_router() {
         fi
     fi
     
-    # Connected clients
+    # WireGuard VPN status
     echo
+    check_wireguard_status
+    
+    # Connected clients
     echo "👥 Connected Clients:"
     if command -v iw >/dev/null 2>&1 && [[ -f "$STATE_DIR/lan_interface" ]]; then
         local lan_iface client_count
@@ -611,23 +754,30 @@ show_help() {
 🔐 RPi5 Secure Travel Router v$VERSION
 
 USAGE:
-    $SCRIPT_NAME {start|stop|status|monitor|audit|reset|help}
+    $SCRIPT_NAME {start|stop|status|monitor|audit|reset|vpn-start|vpn-stop|vpn-status|help}
 
 COMMANDS:
-    start      Start secure router mode
+    start      Start secure router mode (includes WireGuard VPN if enabled)
     stop       Stop router mode and restore normal operation
     status     Show current router status and configuration
     monitor    Real-time monitoring dashboard
     audit      Run security audit and show recommendations
     reset      Reset MT7612U adapter (useful for troubleshooting)
+    vpn-start  Start WireGuard VPN with kill switch
+    vpn-stop   Stop WireGuard VPN and disable kill switch
+    vpn-status Show WireGuard VPN connection status
     help       Show this help message
 
 ENVIRONMENT VARIABLES:
-    WAN_IFACE      WAN interface (auto-detected by default)
-    LAN_IFACE      LAN/AP interface (default: wlan0)
-    AP_ADDR        Router IP and subnet (default: 192.168.8.1/24)
-    USE_5GHZ       Use 5GHz band (default: true)
-    SECURITY_MODE  Security level: high|medium|low (default: high)
+    WAN_IFACE         WAN interface (auto-detected by default)
+    LAN_IFACE         LAN/AP interface (default: wlan0)
+    AP_ADDR           Router IP and subnet (default: 192.168.8.1/24)
+    USE_5GHZ          Use 5GHz band (default: true)
+    SECURITY_MODE     Security level: high|medium|low (default: high)
+    ENABLE_VPN        Enable WireGuard VPN (default: false)
+    ENABLE_KILL_SWITCH Enable VPN kill switch (default: true)
+    VPN_CONFIG        WireGuard config file path
+    VPN_SERVER_IP     VPN server IP for kill switch
 
 EXAMPLES:
     # Start with 2.4GHz
@@ -635,12 +785,19 @@ EXAMPLES:
     
     # Use custom IP range
     AP_ADDR="10.0.0.1/24" sudo $SCRIPT_NAME start
+    
+    # Start with WireGuard VPN enabled
+    ENABLE_VPN=true sudo $SCRIPT_NAME start
+    
+    # Start VPN only
+    sudo $SCRIPT_NAME vpn-start
 
 SECURITY FEATURES:
     ✅ Advanced stateful firewall with DDoS protection
     ✅ WPA2/WPA3 encryption with strong password generation
     ✅ DNS security with malware domain blocking
     ✅ Client isolation and AP security hardening
+    ✅ WireGuard VPN with integrated kill switch
     ✅ System hardening and comprehensive logging
     ✅ MT7612U optimization for Panda adapters
 
@@ -667,6 +824,17 @@ case "${1:-help}" in
         ;;
     reset)
         reset_adapter
+        ;;
+    vpn-start)
+        check_root
+        start_wireguard
+        ;;
+    vpn-stop)
+        check_root
+        stop_wireguard
+        ;;
+    vpn-status)
+        check_wireguard_status
         ;;
     help|--help|-h)
         show_help

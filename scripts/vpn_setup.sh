@@ -1,7 +1,7 @@
 #!/bin/bash
 #===============================================================================
 # VPN Setup Script for RPi5 Secure Router
-# Configure VPN client connections (WireGuard/OpenVPN)
+# Configure WireGuard VPN client connections (primary VPN solution)
 #===============================================================================
 
 set -euo pipefail
@@ -34,15 +34,15 @@ check_vpn_support() {
         echo "   Install with: apt-get install wireguard"
     fi
     
-    # Check for OpenVPN
+    # Check for legacy OpenVPN (deprecated)
     if command -v openvpn >/dev/null 2>&1; then
-        echo "✅ OpenVPN client available"
+        echo "ℹ️ OpenVPN client detected (legacy support only)"
         local ovpn_version
         ovpn_version=$(openvpn --version 2>/dev/null | head -1 | awk '{print $2}' || echo "unknown")
         echo "   Version: $ovpn_version"
+        echo "   Note: WireGuard is now the primary VPN solution"
     else
-        echo "⚠️ OpenVPN not installed"
-        echo "   Install with: apt-get install openvpn"
+        echo "ℹ️ OpenVPN not installed (WireGuard is recommended)"
     fi
     
     # Check kernel modules
@@ -79,18 +79,19 @@ install_vpn_clients() {
     echo "Updating package lists..."
     apt-get update
     
-    echo "Installing WireGuard..."
+    echo "Installing WireGuard (primary VPN)..."
     if apt-get install -y wireguard wireguard-tools; then
         echo "✅ WireGuard installed successfully"
     else
         echo "❌ Failed to install WireGuard"
     fi
     
-    echo "Installing OpenVPN..."
+    echo "Installing legacy OpenVPN support (optional)..."
     if apt-get install -y openvpn openvpn-systemd-resolved; then
-        echo "✅ OpenVPN installed successfully"
+        echo "ℹ️ OpenVPN installed (legacy support only)"
+        echo "   Note: WireGuard is the recommended VPN solution"
     else
-        echo "❌ Failed to install OpenVPN"
+        echo "⚠️ Failed to install OpenVPN (not critical)"
     fi
     
     echo "Loading kernel modules..."
@@ -253,6 +254,13 @@ connect_vpn() {
     local vpn_type="${1:-wireguard}"
     local config_name="${2:-client}"
     
+    # Warn if using deprecated OpenVPN
+    if [[ "$vpn_type" == "openvpn" ]] || [[ "$vpn_type" == "ovpn" ]]; then
+        echo "⚠️ WARNING: OpenVPN is deprecated. WireGuard is recommended for better security and performance."
+        echo "   Consider migrating to WireGuard: ./vpn_setup.sh setup-wg"
+        echo
+    fi
+    
     echo "🔌 Connecting to VPN"
     echo "==================="
     
@@ -295,7 +303,8 @@ connect_vpn() {
             
         *)
             echo "❌ Unknown VPN type: $vpn_type"
-            echo "   Supported types: wireguard, openvpn"
+            echo "   Primary: wireguard (recommended)"
+            echo "   Legacy: openvpn (deprecated)"
             return 1
             ;;
     esac
