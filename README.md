@@ -17,7 +17,7 @@ A comprehensive, security-hardened travel router implementation for Raspberry Pi
 | **WiFi Security** | WPA2/WPA3, AP isolation, 25-char generated passwords | ✅ |
 | **IDS/IPS** | Suricata integration with auto-blocking | ✅ |
 | **System Hardening** | IPv6 disabled, kernel security, service minimization | ✅ |
-| **VPN Support** | WireGuard/OpenVPN with kill switch | ✅ |
+| **VPN Support** | WireGuard with integrated kill switch | ✅ |
 | **Monitoring** | Real-time traffic, security events, adapter health | ✅ |
 | **Logging** | Comprehensive security audit trail | ✅ |
 
@@ -30,7 +30,7 @@ router_pi/
 ├── install.sh                # Dependency installation
 ├── scripts/                  # 🛠️ Utility scripts
 │   ├── mt7612u_monitor.sh    # MT7612U adapter health monitoring
-│   ├── vpn_setup.sh          # VPN client configuration (WG/OpenVPN)
+│   ├── vpn_setup.sh          # WireGuard VPN client configuration
 │   ├── security_audit.sh     # Comprehensive security assessment
 │   ├── network_diag.sh       # Network diagnostics and monitoring
 │   └── test_connectivity.sh  # Quick connectivity verification
@@ -179,9 +179,9 @@ sudo ./scripts/security_audit.sh firewall   # Firewall-specific audit
 # VPN setup and management
 sudo ./scripts/vpn_setup.sh check           # Check VPN support
 sudo ./scripts/vpn_setup.sh setup-wg myvpn  # Setup WireGuard config
-sudo ./scripts/vpn_setup.sh connect wg myvpn # Connect to VPN
-sudo ./scripts/vpn_setup.sh status          # Check VPN status
-sudo ./scripts/vpn_setup.sh kill-switch     # Setup kill switch
+sudo ./scripts/vpn_setup.sh setup-wg myvpn  # Setup WireGuard VPN
+sudo ./scripts/vpn_setup.sh connect myvpn   # Connect to WireGuard
+sudo ./router_pi_secure.sh vpn-status       # Check VPN status
 ```
 
 ## ⚙️ Configuration

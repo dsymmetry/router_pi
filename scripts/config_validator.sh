@@ -401,12 +401,11 @@ validate_vpn_support() {
         ((issues++))
     fi
     
-    # Check OpenVPN
+    # Check legacy OpenVPN
     if command -v openvpn >/dev/null 2>&1; then
-        echo "✅ OpenVPN client available"
+        echo "ℹ️ OpenVPN client available (legacy support)"
     else
-        echo "⚠️ OpenVPN not installed"
-        ((issues++))
+        echo "ℹ️ OpenVPN not installed (WireGuard is preferred)"
     fi
     
     # Check TUN/TAP

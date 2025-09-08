@@ -502,30 +502,31 @@ USAGE:
 COMMANDS:
     check           Check VPN support and requirements
     install         Install VPN clients (requires root)
-    setup-wg [name] Setup WireGuard configuration
-    setup-ovpn [name] Setup OpenVPN configuration
-    connect <type> [name] Connect to VPN (wireguard/openvpn)
+    setup-wg [name] Setup WireGuard configuration (recommended)
+    setup-ovpn [name] Setup OpenVPN configuration (legacy)
+    connect <type> [name] Connect to VPN (wireguard recommended, openvpn legacy)
     disconnect [type] [name] Disconnect VPN
     status          Show VPN connection status
-    kill-switch     Setup VPN kill switch
+    kill-switch     Setup VPN kill switch (integrated with WireGuard)
     help            Show this help message
 
 EXAMPLES:
     $0 check                    # Check VPN support
-    $0 setup-wg myvpn          # Setup WireGuard config
+    $0 setup-wg myvpn          # Setup WireGuard config (recommended)
     $0 connect wireguard myvpn  # Connect to WireGuard
     $0 status                   # Check VPN status
     $0 disconnect              # Disconnect all VPNs
 
 CONFIGURATION FILES:
-    WireGuard: $VPN_CONFIG_DIR/[name].conf
-    OpenVPN:   $VPN_CONFIG_DIR/[name].ovpn
+    WireGuard: $VPN_CONFIG_DIR/[name].conf (recommended)
+    OpenVPN:   $VPN_CONFIG_DIR/[name].ovpn (legacy)
 
 NOTES:
+    - WireGuard is the primary VPN solution (faster, more secure)
+    - OpenVPN support is maintained for legacy compatibility only
     - VPN configurations are stored in $VPN_CONFIG_DIR
-    - Edit configuration files with your VPN provider's settings
-    - Use kill switch to prevent traffic leaks when VPN is down
-    - Check status regularly to ensure VPN is working properly
+    - Kill switch is integrated with the main router script
+    - WireGuard provides better performance and security than OpenVPN
 EOF
 }
 

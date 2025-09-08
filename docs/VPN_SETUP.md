@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide provides comprehensive instructions for setting up VPN client connections on the RPi5 Secure Router, supporting both WireGuard and OpenVPN with security best practices.
+This guide provides comprehensive instructions for setting up WireGuard VPN client connections on the RPi5 Secure Router. WireGuard is the primary VPN solution with integrated kill switch support.
 
 ## 🚀 Quick Start
 
@@ -21,8 +21,8 @@ sudo ./scripts/vpn_setup.sh install
 # WireGuard
 sudo ./scripts/vpn_setup.sh setup-wg myvpn
 
-# OpenVPN  
-sudo ./scripts/vpn_setup.sh setup-ovpn myvpn
+# Legacy OpenVPN (deprecated)
+# sudo ./scripts/vpn_setup.sh setup-ovpn myvpn
 ```
 
 ## 🔧 WireGuard Configuration
@@ -61,7 +61,9 @@ sudo wg-quick down myvpn
 sudo wg show
 ```
 
-## 🔒 OpenVPN Configuration
+## 🔒 Legacy OpenVPN Configuration (Deprecated)
+
+> ⚠️ **Note**: OpenVPN support is deprecated. WireGuard is recommended for better security and performance.
 
 ### Installation
 ```bash
@@ -140,8 +142,8 @@ speedtest-cli
 ping -c 10 8.8.8.8
 
 # Traffic monitoring
-sudo iftop -i wg0  # WireGuard
-sudo iftop -i tun0 # OpenVPN
+sudo iftop -i wg0  # WireGuard (recommended)
+sudo iftop -i tun0 # OpenVPN (legacy)
 ```
 
 ## 🛠️ Troubleshooting
@@ -158,9 +160,9 @@ sudo wg showconf wg0
 nc -u vpn.example.com 51820
 ```
 
-### OpenVPN Issues
+### Legacy OpenVPN Issues (Deprecated)
 ```bash
-# Check logs
+# Check logs (if still using OpenVPN)
 sudo journalctl -u openvpn@myvpn -f
 
 # Verify certificates

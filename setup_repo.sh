@@ -125,7 +125,7 @@ A security-focused travel router implementation for Raspberry Pi 5 with MT7612U 
 - **MT7612U Optimized**: Specific optimizations for Panda adapter
 - **Auto WAN Detection**: Automatically finds upstream interface
 - **DHCP Server**: Built-in with configurable ranges
-- **VPN Ready**: WireGuard/OpenVPN client support
+- **VPN Ready**: WireGuard client with kill switch support
 
 ## 📋 Quick Start
 
@@ -335,8 +335,9 @@ sudo apt-get install wireguard
 wg genkey | tee privatekey | wg pubkey > publickey
 ```
 
-## OpenVPN Setup
+## Legacy OpenVPN Setup (Deprecated)
 ```bash
+# WireGuard is recommended instead
 sudo apt-get install openvpn
 sudo openvpn --config /etc/openvpn/client/config.ovpn
 ```
