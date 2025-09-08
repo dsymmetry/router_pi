@@ -44,6 +44,8 @@ packages=(
     "git"
     "openssl"
     "firmware-misc-nonfree"
+    "wireguard"
+    "wireguard-tools"
 )
 
 for pkg in "${packages[@]}"; do

@@ -203,8 +203,8 @@ sudo ./scripts/mt7612u_monitor.sh reset
 # Check VPN support
 sudo ./scripts/vpn_setup.sh check
 
-# Setup VPN kill switch
-sudo ./scripts/vpn_setup.sh kill-switch
+# Setup WireGuard VPN with integrated kill switch
+ENABLE_VPN=true sudo ./router_pi_secure.sh start
 
 # VPN status
 sudo ./scripts/vpn_setup.sh status
@@ -250,7 +250,7 @@ journalctl -f | grep "ROUTER-DROP"
 1. **VPN Usage**: Always use VPN in untrusted networks
 2. **Client Isolation**: Keep AP isolation enabled
 3. **Hidden SSID**: Consider hiding SSID in hostile environments
-4. **Kill Switch**: Use VPN kill switch to prevent leaks
+4. **WireGuard VPN**: Use integrated WireGuard VPN with kill switch
 5. **Regular Audits**: Run security audits before deployment
 
 ### Emergency Procedures
