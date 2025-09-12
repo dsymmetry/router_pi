@@ -111,7 +111,7 @@ router_pi/
 ### Quick Start
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/router_pi.git
+git clone https://github.com/dsymmetry/router_pi.git
 cd router_pi
 
 # Install dependencies and configure system
