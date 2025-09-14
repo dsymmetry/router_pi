@@ -126,7 +126,7 @@ detect_lan_interface() {
     # Predictable names
     for path in /sys/class/net/wlp* /sys/class/net/wlx*; do
         [[ -e "$path" ]] || continue
-        echo "$(basename "$path")"
+        basename "$path"
         return 0
     done
     # Fallback: first wireless interface
