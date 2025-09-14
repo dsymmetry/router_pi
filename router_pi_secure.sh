@@ -525,7 +525,7 @@ start_router() {
     require openssl
     
     # Auto-detect interfaces if not provided
-    if [[ -z "${WAN_IFACE}" || "${WAN_IFACE}" == "$(ip route 2>/dev/null | awk '/default/ {print $5; exit}') " ]]; then
+    if [[ -z "${WAN_IFACE}" ]]; then
         WAN_IFACE=$(detect_wan_interface)
         log "Detected WAN interface: ${WAN_IFACE}"
     fi
@@ -707,8 +707,8 @@ status_router() {
     # Security status
     echo
     echo "🔒 Security Status:"
-    echo "  Firewall: $(iptables -L INPUT | grep -q "DROP" && echo "ACTIVE" || echo "INACTIVE")"
-    echo "  DNS Security: $(systemctl is-active dnsmasq 2>/dev/null || echo "inactive")"
+    echo "  Firewall: $(iptables -L INPUT | grep -q 'DROP' && echo ACTIVE || echo INACTIVE)"
+    echo "  DNS Security: $(systemctl is-active dnsmasq 2>/dev/null || echo inactive)"
     
     echo
 }
