@@ -27,8 +27,9 @@ ENABLE_KILL_SWITCH="${ENABLE_KILL_SWITCH:-true}" # Enable VPN kill switch
 VPN_SERVER_IP="${VPN_SERVER_IP:-}"               # VPN server IP (for kill switch)
 
 # === NETWORK CONFIGURATION ===
-LAN_IFACE="${LAN_IFACE:-wlan0}"                  # AP interface (MT7612U)
-WAN_IFACE="${WAN_IFACE:-$(ip route 2>/dev/null | awk '/default/ {print $5; exit}')}"
+# Interfaces are auto-detected at runtime if not provided via environment
+LAN_IFACE="${LAN_IFACE:-}"                  # AP interface (auto-detect wireless)
+WAN_IFACE="${WAN_IFACE:-}"                  # WAN/uplink interface (auto-detect wired)
 AP_ADDR="${AP_ADDR:-192.168.8.1/24}"             # AP subnet
 DHCP_RANGE="${DHCP_RANGE:-192.168.8.10,192.168.8.50,12h}"
 USE_5GHZ="${USE_5GHZ:-true}"                     # Use 5GHz by default
@@ -83,6 +84,62 @@ generate_strong_password() {
 get_interface_mac() {
     local iface="$1"
     cat "/sys/class/net/$iface/address" 2>/dev/null || echo "unknown"
+}
+
+# Auto-detect the most suitable WAN interface (prefer default route / wired)
+detect_wan_interface() {
+    local via_default
+    via_default=$(ip route 2>/dev/null | awk '/^default/ {print $5; exit}')
+    if [[ -n "$via_default" && -d "/sys/class/net/$via_default" ]]; then
+        echo "$via_default"
+        return 0
+    fi
+    # Common wired interface names
+    for candidate in eth0 eno1 enp0s25 enp1s0; do
+        if [[ -d "/sys/class/net/$candidate" ]]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+    # Fallback: first non-wireless interface
+    for path in /sys/class/net/*; do
+        local name
+        name=$(basename "$path")
+        [[ "$name" == lo ]] && continue
+        if [[ ! -d "/sys/class/net/$name/wireless" ]]; then
+            echo "$name"
+            return 0
+        fi
+    done
+    echo "eth0"
+}
+
+# Auto-detect the LAN/AP interface (prefer wireless)
+detect_lan_interface() {
+    # Prefer common wireless names if present
+    for candidate in wlan0 wlan1; do
+        if [[ -d "/sys/class/net/$candidate" ]]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+    # Predictable names
+    for path in /sys/class/net/wlp* /sys/class/net/wlx*; do
+        [[ -e "$path" ]] || continue
+        echo "$(basename "$path")"
+        return 0
+    done
+    # Fallback: first wireless interface
+    for path in /sys/class/net/*; do
+        local name
+        name=$(basename "$path")
+        [[ "$name" == lo ]] && continue
+        if [[ -d "/sys/class/net/$name/wireless" ]]; then
+            echo "$name"
+            return 0
+        fi
+    done
+    echo "wlan0"
 }
 
 # === MT7612U SPECIFIC FUNCTIONS ===
@@ -466,6 +523,16 @@ start_router() {
     require hostapd
     require dnsmasq
     require openssl
+    
+    # Auto-detect interfaces if not provided
+    if [[ -z "${WAN_IFACE}" || "${WAN_IFACE}" == "$(ip route 2>/dev/null | awk '/default/ {print $5; exit}') " ]]; then
+        WAN_IFACE=$(detect_wan_interface)
+        log "Detected WAN interface: ${WAN_IFACE}"
+    fi
+    if [[ -z "${LAN_IFACE}" ]]; then
+        LAN_IFACE=$(detect_lan_interface)
+        log "Detected LAN interface: ${LAN_IFACE}"
+    fi
     
     # Detect and configure MT7612U
     detect_mt7612u
