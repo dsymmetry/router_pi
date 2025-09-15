@@ -185,6 +185,7 @@ configure_mt7612u() {
     
     # Set interface down
     ip link set "$iface" down 2>/dev/null || true
+    sleep 1  # Wait for interface to go down
     
     # Configure for AP mode
     iw dev "$iface" set type __ap 2>/dev/null || true
@@ -194,6 +195,9 @@ configure_mt7612u() {
     
     # Power management off for stability
     iw dev "$iface" set power_save off 2>/dev/null || true
+    
+    # Don't bring it up here - let the main function handle it with the IP
+    # But ensure it's ready to be brought up
     
     log "✓ MT7612U interface configured"
 }
@@ -562,9 +566,31 @@ start_router() {
     # Configure network interface
     log "Configuring network interface: $LAN_IFACE"
     ip link set "$LAN_IFACE" down 2>/dev/null || true
+    sleep 1  # Wait for interface to fully go down
     ip addr flush dev "$LAN_IFACE" 2>/dev/null || true
-    ip addr add "$AP_ADDR" dev "$LAN_IFACE"
+    ip addr add "$AP_ADDR" dev "$LAN_IFACE" 
     ip link set "$LAN_IFACE" up
+    ip link set "$WAN_IFACE" up
+
+    # Add this verification section:
+    sleep 2  # Wait for interfaces to be fully up
+
+    # Verify LAN interface is ready
+    local lan_state
+    lan_state=$(cat /sys/class/net/"$LAN_IFACE"/operstate 2>/dev/null)
+    if [[ "$lan_state" != "up" ]] && [[ "$lan_state" != "unknown" ]]; then
+        log "Warning: Interface $LAN_IFACE state is $lan_state, retrying..."
+        ip link set "$LAN_IFACE" up
+        sleep 2
+    fi
+
+    # Verify the IP was assigned
+    if ! ip addr show "$LAN_IFACE" | grep -q "${AP_ADDR%/*}"; then
+        log "Warning: IP address not properly assigned, retrying..."
+        ip addr add "$AP_ADDR" dev "$LAN_IFACE" 2>/dev/null || true
+    fi
+
+    log "✓ Interfaces configured and up"
     
     # Enable IP forwarding
     echo 1 > /proc/sys/net/ipv4/ip_forward
@@ -634,12 +660,36 @@ stop_router() {
     iptables -P FORWARD ACCEPT
     iptables -P OUTPUT ACCEPT
     
-    # Reset interface
+    # Reset interfaces
     if [[ -f "$STATE_DIR/lan_interface" ]]; then
         local lan_iface
         lan_iface=$(cat "$STATE_DIR/lan_interface")
+        log "Resetting LAN interface: $lan_iface"
+    
+        # Remove IP and bring down
+        ip addr flush dev "$lan_iface" 2>/dev/null || true
         ip link set "$lan_iface" down 2>/dev/null || true
+    
+        # Reset to managed mode (for WiFi adapters)
         iw dev "$lan_iface" set type managed 2>/dev/null || true
+    fi
+
+    # Reset WAN interface if needed
+    if [[ -f "$STATE_DIR/wan_interface" ]]; then
+        local wan_iface
+        wan_iface=$(cat "$STATE_DIR/wan_interface")
+        log "Resetting WAN interface: $wan_iface"
+    
+        # Don't bring WAN down - just ensure it's properly configured for normal use
+        # The system's network manager should handle it
+    
+        # If using DHCP, renew the lease
+        if command -v dhclient >/dev/null 2>&1; then
+            dhclient -r "$wan_iface" 2>/dev/null || true
+            dhclient "$wan_iface" 2>/dev/null || true
+        elif command -v dhcpcd >/dev/null 2>&1; then
+            dhcpcd -n "$wan_iface" 2>/dev/null || true
+        fi
     fi
     
     # Clear state
