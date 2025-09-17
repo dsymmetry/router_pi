@@ -30,8 +30,8 @@ VPN_SERVER_IP="${VPN_SERVER_IP:-}"               # VPN server IP (for kill switc
 # Interfaces are auto-detected at runtime if not provided via environment
 LAN_IFACE="${LAN_IFACE:-}"                  # AP interface (auto-detect wireless)
 WAN_IFACE="${WAN_IFACE:-}"                  # WAN/uplink interface (auto-detect wired)
-AP_ADDR="${AP_ADDR:-192.168.8.1/24}"             # AP subnet
-DHCP_RANGE="${DHCP_RANGE:-192.168.8.10,192.168.8.50,12h}"
+AP_ADDR="${AP_ADDR:-10.5.5.1/24}"             # AP subnet
+DHCP_RANGE="${DHCP_RANGE:-10.5.5.10,10.5.5.50,12h}"
 USE_5GHZ="${USE_5GHZ:-true}"                     # Use 5GHz by default
 SSID_PREFIX="${SSID_PREFIX:-SecureTravel}"       # WiFi network prefix
 COUNTRY_CODE="${COUNTRY_CODE:-US}"               # Regulatory domain

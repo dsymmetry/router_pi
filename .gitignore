@@ -55,3 +55,4 @@ dist/
 
 # Project-specific
 pr.sh
+setup_repo.sh
