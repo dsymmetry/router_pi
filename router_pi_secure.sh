@@ -74,7 +74,7 @@ require() {
 }
 
 check_root() {
-    [[ $EUID -eq 0 ]] || error "This script must be run as root (use sudo)"
+    [[ "$EUID" -eq 0 ]] || error "This script must be run as root (use sudo)"
 }
 
 generate_strong_password() {
@@ -105,7 +105,7 @@ detect_wan_interface() {
     for path in /sys/class/net/*; do
         local name
         name=$(basename "$path")
-        [[ "$name" == lo ]] && continue
+        [[ "$name" == "lo" ]] && continue
         if [[ ! -d "/sys/class/net/$name/wireless" ]]; then
             echo "$name"
             return 0
@@ -133,7 +133,7 @@ detect_lan_interface() {
     for path in /sys/class/net/*; do
         local name
         name=$(basename "$path")
-        [[ "$name" == lo ]] && continue
+        [[ "$name" == "lo" ]] && continue
         if [[ -d "/sys/class/net/$name/wireless" ]]; then
             echo "$name"
             return 0
@@ -423,6 +423,17 @@ generate_hostapd_config() {
     mac_suffix=$(get_interface_mac "$LAN_IFACE" | tr -d ':' | tail -c 5)
     local ssid="${SSID_PREFIX}_${mac_suffix}"
     
+    # Set configuration variables
+    local ignore_broadcast_ssid=0
+    if [[ "$HIDDEN_SSID" = "true" ]]; then
+        ignore_broadcast_ssid=1
+    fi
+    
+    local ieee80211ac=0
+    if [[ "$hw_mode" = "a" ]]; then
+        ieee80211ac=1
+    fi
+    
     cat > "$HOSTAPD_CONF" << EOF
 # MT7612U Optimized Configuration
 interface=$LAN_IFACE
@@ -436,7 +447,7 @@ country_code=$COUNTRY_CODE
 
 # Security settings
 auth_algs=1
-ignore_broadcast_ssid=$([ "$HIDDEN_SSID" = "true" ] && echo "1" || echo "0")
+ignore_broadcast_ssid=$ignore_broadcast_ssid
 
 # WPA2/WPA3 Configuration
 wpa=2
@@ -447,7 +458,7 @@ rsn_pairwise=CCMP
 
 # 802.11n/ac settings
 ieee80211n=1
-ieee80211ac=$([ "$hw_mode" = "a" ] && echo "1" || echo "0")
+ieee80211ac=$ieee80211ac
 wmm_enabled=1
 
 # MT7612U specific optimizations
@@ -483,7 +494,7 @@ setup_dns_security() {
         sed -i "s/ROUTER_IP_PLACEHOLDER/${AP_ADDR%/*}/g" "$DNSMASQ_DROPIN"
         # Calculate and set broadcast address
         local broadcast_addr
-        broadcast_addr=$(echo "${AP_ADDR%/*}" | sed 's/\.[0-9]*$/\.255/')
+        broadcast_addr=$(echo "${AP_ADDR%/*}" | sed 's/\.[0-9]*$/.255/')
         sed -i "s/BROADCAST_PLACEHOLDER/$broadcast_addr/g" "$DNSMASQ_DROPIN"
         return 0
     fi
@@ -617,7 +628,7 @@ start_router() {
     lan_state=$(cat /sys/class/net/"$LAN_IFACE"/operstate 2>/dev/null || echo "unknown")
     log "Interface $LAN_IFACE state: $lan_state"
     
-    if [[ "$lan_state" != "up" ]] && [[ "$lan_state" != "unknown" ]]; then
+    if [[ "$lan_state" != "up" && "$lan_state" != "unknown" ]]; then
         log "Warning: Interface $LAN_IFACE state is $lan_state, attempting recovery..."
         
         # Try resetting the interface
@@ -628,7 +639,7 @@ start_router() {
         
         # Check again
         lan_state=$(cat /sys/class/net/"$LAN_IFACE"/operstate 2>/dev/null || echo "unknown")
-        if [[ "$lan_state" != "up" ]] && [[ "$lan_state" != "unknown" ]]; then
+        if [[ "$lan_state" != "up" && "$lan_state" != "unknown" ]]; then
             log "ERROR: Interface $LAN_IFACE failed to come up (state: $lan_state)"
         fi
     fi
@@ -969,7 +980,7 @@ audit_security() {
     # Summary
     echo
     echo "📊 Audit Summary:"
-    if [[ $issues -eq 0 ]]; then
+    if [[ "$issues" -eq 0 ]]; then
         echo "  🎉 No security issues found!"
     else
         echo "  ⚠️ Found $issues potential security issues"
