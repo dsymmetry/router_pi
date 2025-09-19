@@ -40,6 +40,8 @@ HIDDEN_SSID="${HIDDEN_SSID:-false}"              # Hide SSID broadcast
 # === SECURITY PATHS ===
 HOSTAPD_CONF="${HOSTAPD_CONF:-/etc/hostapd/hostapd.conf}"
 DNSMASQ_DROPIN="/etc/dnsmasq.d/router-secure.conf"
+# Create dnsmasq.d directory if it doesn't exist
+mkdir -p /etc/dnsmasq.d 2>/dev/null || true
 # shellcheck disable=SC2034
 SURICATA_CONF="/etc/suricata/suricata.yaml"
 STATE_DIR="/run/routerpi"
@@ -586,6 +588,13 @@ start_router() {
     pkill -f "wpa_supplicant.*$LAN_IFACE" 2>/dev/null || true
     pkill -f "dhclient.*$LAN_IFACE" 2>/dev/null || true
     pkill -f "dhcpcd.*$LAN_IFACE" 2>/dev/null || true
+    
+    # On Kali, ensure NetworkManager isn't managing this interface
+    if command -v nmcli >/dev/null 2>&1 && nmcli -t -f DEVICE,STATE device status 2>/dev/null | grep -q "^$LAN_IFACE:"; then
+        log "Setting $LAN_IFACE to unmanaged in NetworkManager..."
+        nmcli device set "$LAN_IFACE" managed no 2>/dev/null || true
+    fi
+    
     sleep 1
     
     # Set interface down and flush addresses
@@ -671,7 +680,8 @@ start_router() {
     log "Starting network services..."
     
     # Check if systemctl is available (systemd)
-    if command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; then
+    # Note: Kali Linux may have systemctl but not always use systemd as init
+    if command -v systemctl >/dev/null 2>&1 && systemctl is-system-running >/dev/null 2>&1; then
         # Stop services first to ensure clean state
         systemctl stop dnsmasq 2>/dev/null || true
         systemctl stop hostapd 2>/dev/null || true
