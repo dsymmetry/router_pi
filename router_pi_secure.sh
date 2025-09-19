@@ -149,7 +149,7 @@ detect_mt7612u() {
     log "Detecting MT7612U adapter..."
     
     # Check USB devices
-    if lsusb | grep -q "0e8d:7612"; then
+    if lsusb 2>/dev/null | grep -q "0e8d:7612"; then
         log "✓ MT7612U detected via USB"
         return 0
     fi

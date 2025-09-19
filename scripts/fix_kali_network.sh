@@ -102,7 +102,8 @@ reset_wireless_interface() {
     sleep 2
     
     # Check interface state
-    local state=$(cat "/sys/class/net/$INTERFACE/operstate" 2>/dev/null || echo "unknown")
+    local state
+    state=$(cat "/sys/class/net/$INTERFACE/operstate" 2>/dev/null || echo "unknown")
     echo -e "Interface state: ${YELLOW}$state${NC}"
     
     echo -e "${GREEN}✓${NC} Interface reset completed"
@@ -159,7 +160,8 @@ test_interface() {
     echo -e "${YELLOW}Checking AP mode support...${NC}"
     
     # Get phy name
-    local phy=$(iw dev "$INTERFACE" info 2>/dev/null | grep wiphy | awk '{print "phy"$2}')
+    local phy
+    phy=$(iw dev "$INTERFACE" info 2>/dev/null | grep wiphy | awk '{print "phy"$2}')
     
     if [[ -n "$phy" ]]; then
         # Check supported interface modes
@@ -235,7 +237,7 @@ main() {
     if [[ ! -d "/sys/class/net/$INTERFACE" ]]; then
         echo -e "${RED}Interface $INTERFACE not found!${NC}"
         echo "Available interfaces:"
-        ls /sys/class/net/ | grep -v lo
+        find /sys/class/net/ -maxdepth 1 -type l -o -type d | grep -v '/lo$' | xargs -n1 basename 2>/dev/null | grep -v '^$'
         exit 1
     fi
     

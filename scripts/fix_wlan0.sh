@@ -32,7 +32,10 @@ check_interface_exists() {
         echo -e "${RED}Interface $INTERFACE does not exist${NC}"
         echo
         echo "Available interfaces:"
-        ls /sys/class/net/ | grep -v lo | while read -r iface; do
+        for iface in /sys/class/net/*; do
+            [[ ! -e "$iface" ]] && continue
+            iface=$(basename "$iface")
+            [[ "$iface" == "lo" ]] && continue
             if [[ -d "/sys/class/net/$iface/wireless" ]]; then
                 echo -e "  ${YELLOW}$iface${NC} (wireless)"
             else
@@ -46,7 +49,8 @@ check_interface_exists() {
 
 # Function to check interface state
 check_interface_state() {
-    local state=$(cat "/sys/class/net/$INTERFACE/operstate" 2>/dev/null || echo "unknown")
+    local state
+    state=$(cat "/sys/class/net/$INTERFACE/operstate" 2>/dev/null || echo "unknown")
     echo -e "Interface state: ${YELLOW}$state${NC}"
     
     if [[ "$state" == "down" ]]; then
@@ -169,7 +173,11 @@ check_drivers() {
     
     # Check for common wireless modules
     echo -e "\nLoaded wireless modules:"
-    lsmod | grep -E "802|wifi|wlan|wireless|rtl|ath|mt76" | head -10 || echo "No wireless modules found"
+    if lsmod | grep -qE "802|wifi|wlan|wireless|rtl|ath|mt76"; then
+        lsmod | grep -E "802|wifi|wlan|wireless|rtl|ath|mt76" | head -10
+    else
+        echo "No wireless modules found"
+    fi
 }
 
 # Function to test interface
@@ -232,7 +240,8 @@ configure_for_router() {
 show_summary() {
     echo -e "\n${BLUE}=== Summary and Recommendations ===${NC}"
     
-    local state=$(cat "/sys/class/net/$INTERFACE/operstate" 2>/dev/null || echo "unknown")
+    local state
+    state=$(cat "/sys/class/net/$INTERFACE/operstate" 2>/dev/null || echo "unknown")
     
     if [[ "$state" == "up" ]] || [[ "$state" == "unknown" ]]; then
         echo -e "${GREEN}✓${NC} Interface $INTERFACE is ready for use"

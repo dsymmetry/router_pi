@@ -25,7 +25,8 @@ validate_interfaces() {
     echo "===================================="
     
     # Check WAN interface
-    local wan_iface="${WAN_IFACE:-$(ip route 2>/dev/null | awk '/default/ {print $5; exit}')}"
+    local wan_iface
+    wan_iface="${WAN_IFACE:-$(ip route 2>/dev/null | awk '/default/ {print $5; exit}')}"
     if [[ -n "$wan_iface" ]] && [[ -d "/sys/class/net/$wan_iface" ]]; then
         echo "✅ WAN interface ($wan_iface) exists"
         
