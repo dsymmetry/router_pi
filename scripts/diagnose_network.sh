@@ -29,9 +29,9 @@ echo
 # List all network interfaces
 echo "Network interfaces:"
 if command -v ip >/dev/null 2>&1; then
-    ip link show | grep -E "^[0-9]+: " | while read line; do
+    ip link show | grep -E "^[0-9]+: " | while read -r line; do
         iface=$(echo "$line" | cut -d: -f2 | tr -d ' ')
-        state=$(cat /sys/class/net/$iface/operstate 2>/dev/null || echo "unknown")
+        state=$(cat "/sys/class/net/$iface/operstate" 2>/dev/null || echo "unknown")
         if [[ -d "/sys/class/net/$iface/wireless" ]]; then
             echo -e "  ${YELLOW}$iface${NC} (wireless) - state: $state"
             # Check if managed by NetworkManager

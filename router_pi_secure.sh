@@ -494,7 +494,8 @@ setup_dns_security() {
         sed -i "s/ROUTER_IP_PLACEHOLDER/${AP_ADDR%/*}/g" "$DNSMASQ_DROPIN"
         # Calculate and set broadcast address
         local broadcast_addr
-        broadcast_addr=$(echo "${AP_ADDR%/*}" | sed 's/\.[0-9]*$/.255/')
+        local ip_base="${AP_ADDR%/*}"
+        broadcast_addr="${ip_base%.*}.255"
         sed -i "s/BROADCAST_PLACEHOLDER/$broadcast_addr/g" "$DNSMASQ_DROPIN"
         return 0
     fi
@@ -704,8 +705,7 @@ start_router() {
             log "Attempting to start hostapd directly..."
             pkill hostapd 2>/dev/null || true
             sleep 1
-            hostapd -B "$HOSTAPD_CONF"
-            if [[ $? -ne 0 ]]; then
+            if ! hostapd -B "$HOSTAPD_CONF"; then
                 log "ERROR: hostapd failed to start"
                 error "hostapd startup failed. Check logs at $LOG_DIR/router.log"
             fi
@@ -725,8 +725,7 @@ start_router() {
         fi
         
         # Start dnsmasq in background
-        dnsmasq -C "$DNSMASQ_DROPIN"
-        if [[ $? -ne 0 ]]; then
+        if ! dnsmasq -C "$DNSMASQ_DROPIN"; then
             log "ERROR: Failed to start dnsmasq"
             error "dnsmasq startup failed"
         fi
@@ -744,8 +743,7 @@ start_router() {
         fi
         
         # Start hostapd in background
-        hostapd -B "$HOSTAPD_CONF"
-        if [[ $? -ne 0 ]]; then
+        if ! hostapd -B "$HOSTAPD_CONF"; then
             log "ERROR: Failed to start hostapd"
             error "hostapd startup failed"
         fi
