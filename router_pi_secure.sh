@@ -74,7 +74,7 @@ require() {
 }
 
 check_root() {
-    [[ $EUID -eq 0 ]] || error "This script must be run as root (use sudo)"
+    [[ "$EUID" -eq 0 ]] || error "This script must be run as root (use sudo)"
 }
 
 generate_strong_password() {
@@ -105,7 +105,7 @@ detect_wan_interface() {
     for path in /sys/class/net/*; do
         local name
         name=$(basename "$path")
-        [[ "$name" == lo ]] && continue
+        [[ "$name" == "lo" ]] && continue
         if [[ ! -d "/sys/class/net/$name/wireless" ]]; then
             echo "$name"
             return 0
@@ -133,7 +133,7 @@ detect_lan_interface() {
     for path in /sys/class/net/*; do
         local name
         name=$(basename "$path")
-        [[ "$name" == lo ]] && continue
+        [[ "$name" == "lo" ]] && continue
         if [[ -d "/sys/class/net/$name/wireless" ]]; then
             echo "$name"
             return 0
@@ -423,6 +423,17 @@ generate_hostapd_config() {
     mac_suffix=$(get_interface_mac "$LAN_IFACE" | tr -d ':' | tail -c 5)
     local ssid="${SSID_PREFIX}_${mac_suffix}"
     
+    # Set configuration variables
+    local ignore_broadcast_ssid=0
+    if [[ "$HIDDEN_SSID" = "true" ]]; then
+        ignore_broadcast_ssid=1
+    fi
+    
+    local ieee80211ac=0
+    if [[ "$hw_mode" = "a" ]]; then
+        ieee80211ac=1
+    fi
+    
     cat > "$HOSTAPD_CONF" << EOF
 # MT7612U Optimized Configuration
 interface=$LAN_IFACE
@@ -436,7 +447,7 @@ country_code=$COUNTRY_CODE
 
 # Security settings
 auth_algs=1
-ignore_broadcast_ssid=$([ "$HIDDEN_SSID" = "true" ] && echo "1" || echo "0")
+ignore_broadcast_ssid=$ignore_broadcast_ssid
 
 # WPA2/WPA3 Configuration
 wpa=2
@@ -447,7 +458,7 @@ rsn_pairwise=CCMP
 
 # 802.11n/ac settings
 ieee80211n=1
-ieee80211ac=$([ "$hw_mode" = "a" ] && echo "1" || echo "0")
+ieee80211ac=$ieee80211ac
 wmm_enabled=1
 
 # MT7612U specific optimizations
@@ -481,6 +492,11 @@ setup_dns_security() {
         sed -i "s/LISTEN_ADDRESS_PLACEHOLDER/${AP_ADDR%/*}/g" "$DNSMASQ_DROPIN"
         sed -i "s/DHCP_RANGE_PLACEHOLDER/$DHCP_RANGE/g" "$DNSMASQ_DROPIN"
         sed -i "s/ROUTER_IP_PLACEHOLDER/${AP_ADDR%/*}/g" "$DNSMASQ_DROPIN"
+        # Calculate and set broadcast address
+        local broadcast_addr
+        local ip_base="${AP_ADDR%/*}"
+        broadcast_addr="${ip_base%.*}.255"
+        sed -i "s/BROADCAST_PLACEHOLDER/$broadcast_addr/g" "$DNSMASQ_DROPIN"
         return 0
     fi
     
@@ -565,32 +581,79 @@ start_router() {
     
     # Configure network interface
     log "Configuring network interface: $LAN_IFACE"
+    
+    # Kill any processes using the interface
+    pkill -f "wpa_supplicant.*$LAN_IFACE" 2>/dev/null || true
+    pkill -f "dhclient.*$LAN_IFACE" 2>/dev/null || true
+    pkill -f "dhcpcd.*$LAN_IFACE" 2>/dev/null || true
+    sleep 1
+    
+    # Set interface down and flush addresses
     ip link set "$LAN_IFACE" down 2>/dev/null || true
-    sleep 1  # Wait for interface to fully go down
+    sleep 2  # Wait for interface to fully go down
     ip addr flush dev "$LAN_IFACE" 2>/dev/null || true
-    ip addr add "$AP_ADDR" dev "$LAN_IFACE" 
-    ip link set "$LAN_IFACE" up
-    ip link set "$WAN_IFACE" up
+    
+    # For wireless interfaces, ensure proper mode
+    if [[ -d "/sys/class/net/$LAN_IFACE/wireless" ]]; then
+        # Set to unmanaged mode for NetworkManager
+        if command -v nmcli >/dev/null 2>&1; then
+            nmcli device set "$LAN_IFACE" managed no 2>/dev/null || true
+        fi
+        
+        # Ensure interface is in AP mode
+        iw dev "$LAN_IFACE" set type __ap 2>/dev/null || true
+    fi
+    
+    # Configure IP address
+    if ! ip addr add "$AP_ADDR" dev "$LAN_IFACE" 2>/dev/null; then
+        log "Failed to add IP address, checking current addresses..."
+        ip addr show "$LAN_IFACE"
+        error "Failed to configure IP address on $LAN_IFACE"
+    fi
+    
+    # Bring interface up
+    if ! ip link set "$LAN_IFACE" up 2>/dev/null; then
+        log "Failed to bring up interface, checking state..."
+        ip link show "$LAN_IFACE"
+        error "Failed to bring up $LAN_IFACE"
+    fi
+    
+    # Ensure WAN interface is up
+    ip link set "$WAN_IFACE" up 2>/dev/null || true
 
-    # Add this verification section:
-    sleep 2  # Wait for interfaces to be fully up
+    # Wait and verify interfaces are ready
+    sleep 3  # Wait for interfaces to be fully up
 
     # Verify LAN interface is ready
     local lan_state
-    lan_state=$(cat /sys/class/net/"$LAN_IFACE"/operstate 2>/dev/null)
-    if [[ "$lan_state" != "up" ]] && [[ "$lan_state" != "unknown" ]]; then
-        log "Warning: Interface $LAN_IFACE state is $lan_state, retrying..."
+    lan_state=$(cat /sys/class/net/"$LAN_IFACE"/operstate 2>/dev/null || echo "unknown")
+    log "Interface $LAN_IFACE state: $lan_state"
+    
+    if [[ "$lan_state" != "up" && "$lan_state" != "unknown" ]]; then
+        log "Warning: Interface $LAN_IFACE state is $lan_state, attempting recovery..."
+        
+        # Try resetting the interface
+        ip link set "$LAN_IFACE" down
+        sleep 2
         ip link set "$LAN_IFACE" up
         sleep 2
+        
+        # Check again
+        lan_state=$(cat /sys/class/net/"$LAN_IFACE"/operstate 2>/dev/null || echo "unknown")
+        if [[ "$lan_state" != "up" && "$lan_state" != "unknown" ]]; then
+            log "ERROR: Interface $LAN_IFACE failed to come up (state: $lan_state)"
+        fi
     fi
 
     # Verify the IP was assigned
     if ! ip addr show "$LAN_IFACE" | grep -q "${AP_ADDR%/*}"; then
-        log "Warning: IP address not properly assigned, retrying..."
-        ip addr add "$AP_ADDR" dev "$LAN_IFACE" 2>/dev/null || true
+        log "ERROR: IP address not properly assigned to $LAN_IFACE"
+        ip addr show "$LAN_IFACE"
+    else
+        log "✓ IP address ${AP_ADDR} assigned to $LAN_IFACE"
     fi
 
-    log "✓ Interfaces configured and up"
+    log "✓ Network interfaces configured"
     
     # Enable IP forwarding
     echo 1 > /proc/sys/net/ipv4/ip_forward
@@ -606,8 +669,86 @@ start_router() {
     
     # Start services
     log "Starting network services..."
-    systemctl restart dnsmasq
-    systemctl restart hostapd
+    
+    # Check if systemctl is available (systemd)
+    if command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; then
+        # Stop services first to ensure clean state
+        systemctl stop dnsmasq 2>/dev/null || true
+        systemctl stop hostapd 2>/dev/null || true
+        sleep 1
+        
+        # Start dnsmasq
+        if ! systemctl restart dnsmasq; then
+            log "ERROR: Failed to start dnsmasq via systemctl"
+            log "Checking dnsmasq configuration..."
+            dnsmasq --test -C "$DNSMASQ_DROPIN" 2>&1 | tee -a "$LOG_DIR/router.log"
+            
+            # Try starting dnsmasq directly
+            log "Attempting to start dnsmasq directly..."
+            pkill dnsmasq 2>/dev/null || true
+            sleep 1
+            if dnsmasq -C "$DNSMASQ_DROPIN"; then
+                log "✓ dnsmasq started directly"
+            else
+                log "ERROR: dnsmasq failed to start"
+                error "dnsmasq startup failed. Check logs at $LOG_DIR/router.log"
+            fi
+        fi
+        
+        # Start hostapd
+        if ! systemctl restart hostapd; then
+            log "ERROR: Failed to start hostapd via systemctl"
+            log "Checking hostapd configuration..."
+            hostapd -dd "$HOSTAPD_CONF" -t 2>&1 | head -20 | tee -a "$LOG_DIR/router.log"
+            
+            # Try starting hostapd directly
+            log "Attempting to start hostapd directly..."
+            pkill hostapd 2>/dev/null || true
+            sleep 1
+            if ! hostapd -B "$HOSTAPD_CONF"; then
+                log "ERROR: hostapd failed to start"
+                error "hostapd startup failed. Check logs at $LOG_DIR/router.log"
+            fi
+        fi
+    else
+        # Non-systemd environment, start services directly
+        log "Starting services directly (non-systemd environment)..."
+        
+        # Start dnsmasq
+        pkill dnsmasq 2>/dev/null || true
+        sleep 1
+        
+        # Test configuration first
+        if ! dnsmasq --test -C "$DNSMASQ_DROPIN"; then
+            log "ERROR: dnsmasq configuration test failed"
+            error "Invalid dnsmasq configuration"
+        fi
+        
+        # Start dnsmasq in background
+        if ! dnsmasq -C "$DNSMASQ_DROPIN"; then
+            log "ERROR: Failed to start dnsmasq"
+            error "dnsmasq startup failed"
+        fi
+        log "✓ dnsmasq started successfully"
+        
+        # Start hostapd
+        pkill hostapd 2>/dev/null || true
+        sleep 1
+        
+        # Test configuration first
+        if ! hostapd -t "$HOSTAPD_CONF" >/dev/null 2>&1; then
+            log "ERROR: hostapd configuration test failed"
+            hostapd -dd "$HOSTAPD_CONF" -t 2>&1 | head -20 | tee -a "$LOG_DIR/router.log"
+            error "Invalid hostapd configuration"
+        fi
+        
+        # Start hostapd in background
+        if ! hostapd -B "$HOSTAPD_CONF"; then
+            log "ERROR: Failed to start hostapd"
+            error "hostapd startup failed"
+        fi
+        log "✓ hostapd started successfully"
+    fi
     
     # Start WireGuard VPN if enabled
     start_wireguard
@@ -837,7 +978,7 @@ audit_security() {
     # Summary
     echo
     echo "📊 Audit Summary:"
-    if [[ $issues -eq 0 ]]; then
+    if [[ "$issues" -eq 0 ]]; then
         echo "  🎉 No security issues found!"
     else
         echo "  ⚠️ Found $issues potential security issues"
