@@ -40,6 +40,8 @@ HIDDEN_SSID="${HIDDEN_SSID:-false}"              # Hide SSID broadcast
 # === SECURITY PATHS ===
 HOSTAPD_CONF="${HOSTAPD_CONF:-/etc/hostapd/hostapd.conf}"
 DNSMASQ_DROPIN="/etc/dnsmasq.d/router-secure.conf"
+# Create dnsmasq.d directory if it doesn't exist
+mkdir -p /etc/dnsmasq.d 2>/dev/null || true
 # shellcheck disable=SC2034
 SURICATA_CONF="/etc/suricata/suricata.yaml"
 STATE_DIR="/run/routerpi"
@@ -147,7 +149,7 @@ detect_mt7612u() {
     log "Detecting MT7612U adapter..."
     
     # Check USB devices
-    if lsusb | grep -q "0e8d:7612"; then
+    if lsusb 2>/dev/null | grep -q "0e8d:7612"; then
         log "✓ MT7612U detected via USB"
         return 0
     fi
@@ -293,7 +295,9 @@ stop_wireguard() {
     log "Stopping WireGuard VPN..."
     
     # Stop all WireGuard interfaces
-    for interface in $(wg show interfaces 2>/dev/null); do
+    local interfaces
+    interfaces=$(wg show interfaces 2>/dev/null || true)
+    for interface in $interfaces; do
         wg-quick down "$interface" 2>/dev/null || true
         log "✓ Stopped WireGuard interface: $interface"
     done
@@ -586,6 +590,13 @@ start_router() {
     pkill -f "wpa_supplicant.*$LAN_IFACE" 2>/dev/null || true
     pkill -f "dhclient.*$LAN_IFACE" 2>/dev/null || true
     pkill -f "dhcpcd.*$LAN_IFACE" 2>/dev/null || true
+    
+    # On Kali, ensure NetworkManager isn't managing this interface
+    if command -v nmcli >/dev/null 2>&1 && nmcli -t -f DEVICE,STATE device status 2>/dev/null | grep -q "^$LAN_IFACE:"; then
+        log "Setting $LAN_IFACE to unmanaged in NetworkManager..."
+        nmcli device set "$LAN_IFACE" managed no 2>/dev/null || true
+    fi
+    
     sleep 1
     
     # Set interface down and flush addresses
@@ -671,7 +682,8 @@ start_router() {
     log "Starting network services..."
     
     # Check if systemctl is available (systemd)
-    if command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; then
+    # Note: Kali Linux may have systemctl but not always use systemd as init
+    if command -v systemctl >/dev/null 2>&1 && systemctl is-system-running >/dev/null 2>&1; then
         # Stop services first to ensure clean state
         systemctl stop dnsmasq 2>/dev/null || true
         systemctl stop hostapd 2>/dev/null || true
@@ -862,8 +874,11 @@ status_router() {
         wan_iface=$(cat "$STATE_DIR/wan_interface" 2>/dev/null || echo "unknown")
         lan_iface=$(cat "$STATE_DIR/lan_interface" 2>/dev/null || echo "unknown")
         
-        echo "  WAN: $wan_iface ($(ip -4 addr show "$wan_iface" 2>/dev/null | grep inet | awk '{print $2}' | head -1 || echo 'no IP'))"
-        echo "  LAN: $lan_iface ($(ip -4 addr show "$lan_iface" 2>/dev/null | grep inet | awk '{print $2}' | head -1 || echo 'no IP'))"
+        local wan_ip lan_ip
+        wan_ip=$(ip -4 addr show "$wan_iface" 2>/dev/null | grep inet | awk '{print $2}' | head -1 || echo 'no IP')
+        lan_ip=$(ip -4 addr show "$lan_iface" 2>/dev/null | grep inet | awk '{print $2}' | head -1 || echo 'no IP')
+        echo "  WAN: $wan_iface ($wan_ip)"
+        echo "  LAN: $lan_iface ($lan_ip)"
     fi
     
     # WiFi information
@@ -898,8 +913,15 @@ status_router() {
     # Security status
     echo
     echo "🔒 Security Status:"
-    echo "  Firewall: $(iptables -L INPUT | grep -q 'DROP' && echo ACTIVE || echo INACTIVE)"
-    echo "  DNS Security: $(systemctl is-active dnsmasq 2>/dev/null || echo inactive)"
+    local firewall_status dns_status
+    if iptables -L INPUT | grep -q 'DROP'; then
+        firewall_status="ACTIVE"
+    else
+        firewall_status="INACTIVE"
+    fi
+    dns_status=$(systemctl is-active dnsmasq 2>/dev/null || echo inactive)
+    echo "  Firewall: $firewall_status"
+    echo "  DNS Security: $dns_status"
     
     echo
 }
