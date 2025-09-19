@@ -593,18 +593,18 @@ start_router() {
     fi
     
     # Configure IP address
-    ip addr add "$AP_ADDR" dev "$LAN_IFACE" || {
+    if ! ip addr add "$AP_ADDR" dev "$LAN_IFACE" 2>/dev/null; then
         log "Failed to add IP address, checking current addresses..."
         ip addr show "$LAN_IFACE"
         error "Failed to configure IP address on $LAN_IFACE"
-    }
+    fi
     
     # Bring interface up
-    ip link set "$LAN_IFACE" up || {
+    if ! ip link set "$LAN_IFACE" up 2>/dev/null; then
         log "Failed to bring up interface, checking state..."
         ip link show "$LAN_IFACE"
         error "Failed to bring up $LAN_IFACE"
-    }
+    fi
     
     # Ensure WAN interface is up
     ip link set "$WAN_IFACE" up 2>/dev/null || true
@@ -675,10 +675,9 @@ start_router() {
             log "Attempting to start dnsmasq directly..."
             pkill dnsmasq 2>/dev/null || true
             sleep 1
-            dnsmasq -C "$DNSMASQ_DROPIN" -d &
-            DNSMASQ_PID=$!
-            sleep 2
-            if ! kill -0 $DNSMASQ_PID 2>/dev/null; then
+            if dnsmasq -C "$DNSMASQ_DROPIN"; then
+                log "✓ dnsmasq started directly"
+            else
                 log "ERROR: dnsmasq failed to start"
                 error "dnsmasq startup failed. Check logs at $LOG_DIR/router.log"
             fi
