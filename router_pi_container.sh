@@ -355,13 +355,13 @@ start_router() {
     # Show process status
     echo
     log "Service status:"
-    if [[ -f "$STATE_DIR/dnsmasq.pid" ]] && kill -0 $(cat "$STATE_DIR/dnsmasq.pid") 2>/dev/null; then
+    if [[ -f "$STATE_DIR/dnsmasq.pid" ]] && kill -0 "$(cat "$STATE_DIR/dnsmasq.pid")" 2>/dev/null; then
         log "  ✅ dnsmasq is running"
     else
         log "  ❌ dnsmasq is not running"
     fi
     
-    if [[ -f "$STATE_DIR/hostapd.pid" ]] && kill -0 $(cat "$STATE_DIR/hostapd.pid") 2>/dev/null; then
+    if [[ -f "$STATE_DIR/hostapd.pid" ]] && kill -0 "$(cat "$STATE_DIR/hostapd.pid")" 2>/dev/null; then
         log "  ✅ hostapd is running"
     else
         log "  ❌ hostapd is not running"
@@ -374,12 +374,12 @@ stop_router() {
     
     # Stop services
     if [[ -f "$STATE_DIR/hostapd.pid" ]]; then
-        kill $(cat "$STATE_DIR/hostapd.pid") 2>/dev/null || true
+        kill "$(cat "$STATE_DIR/hostapd.pid")" 2>/dev/null || true
         rm -f "$STATE_DIR/hostapd.pid"
     fi
     
     if [[ -f "$STATE_DIR/dnsmasq.pid" ]]; then
-        kill $(cat "$STATE_DIR/dnsmasq.pid") 2>/dev/null || true
+        kill "$(cat "$STATE_DIR/dnsmasq.pid")" 2>/dev/null || true
         rm -f "$STATE_DIR/dnsmasq.pid"
     fi
     
@@ -395,7 +395,8 @@ stop_router() {
     
     # Reset interface
     if [[ -f "$STATE_DIR/lan_interface" ]]; then
-        local lan_iface=$(cat "$STATE_DIR/lan_interface")
+        local lan_iface
+        lan_iface=$(cat "$STATE_DIR/lan_interface")
         bring_interface_down "$lan_iface" 2>/dev/null || true
     fi
     
@@ -440,13 +441,13 @@ status_router() {
     
     echo
     echo "🔧 Service Status:"
-    if [[ -f "$STATE_DIR/dnsmasq.pid" ]] && kill -0 $(cat "$STATE_DIR/dnsmasq.pid") 2>/dev/null; then
+    if [[ -f "$STATE_DIR/dnsmasq.pid" ]] && kill -0 "$(cat "$STATE_DIR/dnsmasq.pid")" 2>/dev/null; then
         echo "  ✅ dnsmasq is running (PID: $(cat "$STATE_DIR/dnsmasq.pid"))"
     else
         echo "  ❌ dnsmasq is not running"
     fi
     
-    if [[ -f "$STATE_DIR/hostapd.pid" ]] && kill -0 $(cat "$STATE_DIR/hostapd.pid") 2>/dev/null; then
+    if [[ -f "$STATE_DIR/hostapd.pid" ]] && kill -0 "$(cat "$STATE_DIR/hostapd.pid")" 2>/dev/null; then
         echo "  ✅ hostapd is running (PID: $(cat "$STATE_DIR/hostapd.pid"))"
     else
         echo "  ❌ hostapd is not running"
