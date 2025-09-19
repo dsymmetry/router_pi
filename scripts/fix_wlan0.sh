@@ -140,7 +140,7 @@ check_rfkill() {
         # Check sysfs for rfkill
         for rfkill in /sys/class/rfkill/*/; do
             if [[ -f "$rfkill/name" ]] && grep -q "$INTERFACE" "$rfkill/name" 2>/dev/null; then
-                if [[ -f "$rfkill/soft" ]] && [[ $(cat "$rfkill/soft") == "1" ]]; then
+                if [[ -f "$rfkill/soft" ]] && [[ "$(cat "$rfkill/soft")" == "1" ]]; then
                     echo 0 > "$rfkill/soft"
                     echo -e "${GREEN}✓${NC} Unblocked via sysfs"
                 fi
@@ -155,7 +155,8 @@ check_drivers() {
     
     # Check if interface has a driver
     if [[ -L "/sys/class/net/$INTERFACE/device/driver" ]]; then
-        local driver=$(basename $(readlink "/sys/class/net/$INTERFACE/device/driver"))
+        local driver
+        driver=$(basename "$(readlink "/sys/class/net/$INTERFACE/device/driver")")
         echo -e "${GREEN}✓${NC} Driver loaded: $driver"
         
         # Check module info

@@ -295,7 +295,9 @@ stop_wireguard() {
     log "Stopping WireGuard VPN..."
     
     # Stop all WireGuard interfaces
-    for interface in $(wg show interfaces 2>/dev/null); do
+    local interfaces
+    interfaces=$(wg show interfaces 2>/dev/null || true)
+    for interface in $interfaces; do
         wg-quick down "$interface" 2>/dev/null || true
         log "✓ Stopped WireGuard interface: $interface"
     done
@@ -872,8 +874,11 @@ status_router() {
         wan_iface=$(cat "$STATE_DIR/wan_interface" 2>/dev/null || echo "unknown")
         lan_iface=$(cat "$STATE_DIR/lan_interface" 2>/dev/null || echo "unknown")
         
-        echo "  WAN: $wan_iface ($(ip -4 addr show "$wan_iface" 2>/dev/null | grep inet | awk '{print $2}' | head -1 || echo 'no IP'))"
-        echo "  LAN: $lan_iface ($(ip -4 addr show "$lan_iface" 2>/dev/null | grep inet | awk '{print $2}' | head -1 || echo 'no IP'))"
+        local wan_ip lan_ip
+        wan_ip=$(ip -4 addr show "$wan_iface" 2>/dev/null | grep inet | awk '{print $2}' | head -1 || echo 'no IP')
+        lan_ip=$(ip -4 addr show "$lan_iface" 2>/dev/null | grep inet | awk '{print $2}' | head -1 || echo 'no IP')
+        echo "  WAN: $wan_iface ($wan_ip)"
+        echo "  LAN: $lan_iface ($lan_ip)"
     fi
     
     # WiFi information
@@ -908,8 +913,15 @@ status_router() {
     # Security status
     echo
     echo "🔒 Security Status:"
-    echo "  Firewall: $(iptables -L INPUT | grep -q 'DROP' && echo ACTIVE || echo INACTIVE)"
-    echo "  DNS Security: $(systemctl is-active dnsmasq 2>/dev/null || echo inactive)"
+    local firewall_status dns_status
+    if iptables -L INPUT | grep -q 'DROP'; then
+        firewall_status="ACTIVE"
+    else
+        firewall_status="INACTIVE"
+    fi
+    dns_status=$(systemctl is-active dnsmasq 2>/dev/null || echo inactive)
+    echo "  Firewall: $firewall_status"
+    echo "  DNS Security: $dns_status"
     
     echo
 }
